@@ -1,0 +1,200 @@
+
+tc3a <- fread("apa_data_imputed_TC3A.csv",data.table = F)
+gc <- fread("apa_cleaned_data_imputed_KNN.csv",data.table = F)
+merge_APA <- merge( gc,tc3a, by.x="Gene", by.y="Symbol" )
+library("VennDiagram")
+venn.diagram(x=list(gc$Gene, tc3a$Symbol ),
+             scaled = F, 							
+             alpha= 0.5, 							
+             lwd=1,lty=1,col=c('#4489C9','#EE7C79'), 
+             label.col ='black' , 					
+             cex = 2, 								
+             fontface = "bold",  					
+             fill=c('#4489C9','#EE7C79'), 			
+             category.names = c("TC3A", "AhGC") , 	
+             cat.dist = 0.02, 					
+             cat.pos = -180, 						
+             cat.cex = 2, 							
+             cat.fontface = "bold",  			
+             cat.col='black' ,   					
+             cat.default.pos = "outer",  			
+             output=TRUE,
+             filename='./venn_APA_TC3A.png',		
+             imagetype="png",  						
+             resolution = 400,  					
+             compression = "lzw"					
+)
+
+
+data <- fread("new_DE_APA_1210.csv",data.table = F)
+data$APA_sigGroup = ifelse(data$detal_PDUI > 0.05&data$p.adjust< 0.05 ,'Up',(ifelse(data$detal_PDUI< -0.05&data$p.adjust< 0.05,"Down","None")))
+cut_off_pvalue <- 0.05
+
+library(ggplot2)
+p <- ggplot(data = data, aes(x = detal_PDUI, y = -log10(p.adjust))) +
+  geom_point(alpha = 0.8, aes(color = APA_sigGroup, shape = APA_sigGroup), size = 2.5) +
+  xlab("Delta_PDUI") + 
+  ylab("-log10(FDR)") +
+  theme_classic() +
+  theme(
+    axis.line = element_line(size = 1.5, color = "black"),
+    axis.ticks = element_line(size = 1, color = "black"),
+    axis.text.x = element_text(size = 20, face = "bold", color = "black"),
+    axis.text.y = element_text(size = 20, face = "bold", color = "black"),
+    axis.title.x = element_text(size = 18, face = "bold"),  
+    axis.title.y = element_text(size = 18, face = "bold"),  
+    legend.title = element_blank(), 
+    legend.text = element_text(size = 18, face = "bold"),  
+    legend.key.size = unit(2, "lines"),                  
+    legend.spacing.y = unit(1, "cm")                     
+  ) +
+  scale_color_manual(values = c("#485E8F", "grey", "#BA3A3A")) +
+  scale_shape_manual(values = c(16, 16, 16)) +
+  scale_size(range = c(0.1, 4)) +
+  geom_hline(
+    aes(yintercept = -log(0.05, base = 10)), 
+    colour = "black", 
+    linetype = "dashed", 
+    size = 1.2
+  ) +
+  geom_vline(
+    aes(xintercept = -0.05), 
+    colour = "black", 
+    linetype = "dashed", 
+    size = 1.2  
+  ) +
+  geom_vline(
+    aes(xintercept = 0.05), 
+    colour = "black", 
+    linetype = "dashed", 
+    size = 1.2 
+  ) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6)) +
+  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, by = 2))
+
+ggsave('Delta_PDUI.tiff', plot=p, width=10, height=10, units='in', dpi=600)
+
+
+library(ggplot2)
+p <- ggplot(data = data, aes(x = Delta_PDUI, y = -log10(p_dfr))) +
+  geom_point(alpha = 0.8, aes(color = APA_sigGroup, shape = APA_sigGroup), size = 2.5) +
+  xlab("Delta_PDUI") + ylab("-log10(FDR)") +
+  theme(legend.title = element_blank()) +
+  theme_classic() +
+  scale_color_manual(values = c("#485E8F", "grey", "#BA3A3A")) +
+  scale_shape_manual(values = c(16, 16, 16)) +
+  scale_size(range = c(0.1, 4)) +
+  geom_hline(aes(yintercept = -log10(0.05)), colour = "gray46", linetype = "dashed", linewidth = 2) +
+  geom_vline(aes(xintercept = -0.05), colour = "gray46", linetype = "dashed", linewidth = 2) +
+  geom_vline(aes(xintercept = 0.05), colour = "gray46", linetype = "dashed", linewidth = 2) +
+  theme(axis.title.x = element_text(size = 15, face = "bold"), 
+        axis.title.y = element_text(size = 16, face = "bold")) +
+  theme(axis.text.x = element_text(size = 15, face = "bold", color = "black"),
+        axis.text.y = element_text(size = 15, face = "bold", color = "black")) +
+  scale_x_continuous(limits = c(-0.6, 0.6), breaks = c(-0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6)) +
+  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, by = 2)) +
+  theme(
+    axis.line = element_line(linewidth = 2),  
+    legend.box.background = element_rect(linewidth = 2)  
+  )
+ggsave('Delta_PDUI_pro.png', plot = p, width = 10, height = 10, units = 'in', dpi = 300)
+########
+
+
+pdf("APA_PDUI_pro.pdf", width = 6, height = 6)
+par(
+  lwd = 2,         
+  cex.lab = 1.3,   
+  cex.axis = 1.5,   
+  mar = c(5, 5, 3, 3) 
+)
+
+col0 <- rep("#00000022", nrow(data))
+col0[(abs(data$Delta_PDUI) >= 0.05) & (data$media_N > data$media_T)] <- "#3c78d8"  
+col0[(abs(data$Delta_PDUI) >= 0.05) & (data$media_N < data$media_T)] <- "#cc0000"  
+pch0 <- rep(21, nrow(data))
+
+par(pty = "s")  
+plot(
+  data[, c("media_N", "media_T")],
+  bg = col0, pch = pch0, col = NA, cex = 0.8,
+  axes = FALSE, xlab = "", ylab = "",
+  lwd = 1.5 
+)
+
+title(
+  xlab = "PDUI Normal", ylab = "PDUI Tumor",
+  line = 2.3, cex.lab = 1.3, font.lab = 2 
+)
+title(main = "", line = 0.5)
+
+box(lwd = 3) 
+axis(1, at = c(0, 0.5, 1), lwd = 3, font = 2)  
+axis(2, at = c(0, 0.5, 1), lwd = 3, font = 2)  
+
+abline(c(0.05, 1), lty = 2, lwd = 3)  
+abline(c(-0.05, 1), lty = 2, lwd = 3)
+
+dev.off()
+
+
+
+
+
+data <- subset(data, data$p.adjust < 0.05)
+pdf("APA_PDUI_pro_optimized.pdf", width = 6, height = 6)
+
+par(
+  lwd = 2,       
+  cex.lab = 1.3,    
+  cex.axis = 1.5,   
+  mar = c(5, 5, 3, 3), 
+  pty = "s"         
+)
+
+is_shortening <- (data$detal_abs > 0.05) & (data$media_N > data$media_T) 
+is_lengthening <- (data$detal_abs > 0.05) & (data$media_N < data$media_T) 
+n_short <- sum(is_shortening, na.rm = TRUE)
+n_len   <- sum(is_lengthening, na.rm = TRUE)
+
+col0 <- rep("#00000022", nrow(data)) 
+col0[is_shortening] <- "#3c78d8"     
+col0[is_lengthening] <- "#cc0000"    
+
+plot(1, type = "n", xlim = c(0, 1), ylim = c(0, 1),
+     axes = FALSE, xlab = "", ylab = "")
+
+abline(0, 1, col = "gray80", lwd = 2)        
+abline(c(0.05, 1), lty = 2, lwd = 2, col="black") 
+abline(c(-0.05, 1), lty = 2, lwd = 2, col="black") 
+
+points(
+  data$media_N, 
+  data$media_T,
+  bg = col0,     
+  pch = 21,       
+  col = NA,      
+  cex = 0.8       
+)
+
+
+title(
+  xlab = "PDUI Normal", 
+  ylab = "PDUI Tumor",
+  line = 2.3, cex.lab = 1.3, font.lab = 2
+)
+box(lwd = 3) 
+
+axis(1, at = c(0, 0.5, 1), lwd = 3, font = 2)
+axis(2, at = c(0, 0.5, 1), lwd = 3, font = 2)
+
+text(x = 0.02, y = 0.98, 
+     labels = paste0("Lengthening: ", n_len), 
+     col = "#cc0000", adj = c(0, 1), font = 2, cex = 1)
+
+text(x = 0.98, y = 0.02, 
+     labels = paste0("Shortening: ", n_short), 
+     col = "#3c78d8", adj = c(1, 0), font = 2, cex = 1)
+
+dev.off()
+
