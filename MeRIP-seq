@@ -1,0 +1,217 @@
+setwd("E:\\APA\\data\\MeRIP-seq\\data")
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install(c("ggplot2", "pheatmap", "Guitar", "clusterProfiler", 
+                       "org.Hs.eg.db", "TxDb.Hsapiens.UCSC.hg38.knownGene", 
+                       "trackViewer", "dplyr", "ggrepel"))
+
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(ggrepel)     
+library(pheatmap)  
+library(Guitar)       
+library(clusterProfiler) 
+library(org.Hs.eg.db) 
+library(trackViewer)  
+
+res_df <- fread("m6A_peaks_p0.05.csv")
+
+fc_cutoff <- 0 # log2FC > 1 或 < -1
+fdr_cutoff <- 0.05
+
+res_df$group <- "Not Significant"
+res_df$group[res_df$log2FoldChange > fc_cutoff & res_df$fdr < fdr_cutoff] <- "Hyper"
+res_df$group[res_df$log2FoldChange < -fc_cutoff & res_df$fdr < fdr_cutoff] <- "Hypo"
+
+ggplot(res_df, aes(x = log2FoldChange, y = -log10(fdr), color = group)) +
+  geom_point(alpha = 0.6, size = 1.5) +
+  scale_color_manual(values = c("Hyper" = "#E41A1C", "Hypo" = "#377EB8", "Not Significant" = "grey")) +
+  geom_vline(xintercept = c(-fc_cutoff, fc_cutoff), linetype = "dashed", color = "black") +
+  geom_hline(yintercept = -log10(fdr_cutoff), linetype = "dashed", color = "black") +
+  theme_bw() +
+  labs(title = "Volcano Plot of Differential m6A Peaks",
+       x = "log2 Fold Change (Tumor / Normal)",
+       y = "-log10 FDR") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+# BiocManager::install("exomePeak2")
+library(exomePeak2)
+library(rtracklayer) 
+library(TxDb.Hsapiens.UCSC.hg38.knownGene) 
+library(BSgenome.Hsapiens.UCSC.hg38)   
+
+library(GenomeInfoDb)
+my_txdb_hg38 <- TxDb.Hsapiens.UCSC.hg38.knownGene
+seqlevelsStyle(my_txdb_hg38) <- "NCBI"  
+my_genome_hg38 <- BSgenome.Hsapiens.UCSC.hg38
+seqlevelsStyle(my_genome_hg38) <- "NCBI" 
+
+BAM_IP_T <- c("E:/MeRIP-seq数据/Data/release/mapping/IP_T1.Aligned.sortedByCoord.out.bam", 
+"E:/MeRIP-seq/Data/release/mapping/IP_T2.Aligned.sortedByCoord.out.bam",
+"E:/MeRIP-seq/Data/release/mapping/IP_T3.Aligned.sortedByCoord.out.bam")
+BAM_Input_T <- c("E:/MeRIP-seq数据/Data/release/mapping/input_T1.Aligned.sortedByCoord.out.bam",
+"E:/MeRIP-seq/Data/release/mapping/input_T2.Aligned.sortedByCoord.out.bam",
+"E:/MeRIP-seq/Data/release/mapping/input_T3.Aligned.sortedByCoord.out.bam")
+
+BAM_IP_N <- c("E:/MeRIP-seq/Data/release/mapping/IP_N1.Aligned.sortedByCoord.out.bam", 
+"E:/MeRIP-seq/Data/release/mapping/IP_N2.Aligned.sortedByCoord.out.bam",
+"E:/MeRIP-seq/Data/release/mapping/IP_N3.Aligned.sortedByCoord.out.bam")
+BAM_Input_N <- c("E:/MeRIP-seq/Data/release/mapping/input_N1.Aligned.sortedByCoord.out.bam", 
+"E:/MeRIP-seq/Data/release/mapping/input_N2.Aligned.sortedByCoord.out.bam",
+"E:/MeRIP-seq/Data/release/mapping/input_N3.Aligned.sortedByCoord.out.bam")
+
+
+#  exomePeak2
+res_T <- exomePeak2(
+  bam_ip = BAM_IP_T,
+  bam_input = BAM_Input_T,
+  txdb = my_txdb_hg38,      
+  genome = my_genome_hg38
+)
+res_N <- exomePeak2(
+  bam_ip = BAM_IP_N,
+  bam_input = BAM_Input_N,
+  txdb = my_txdb_hg38,      
+  genome = my_genome_hg38
+)
+#  BED
+export(res_T, "Peaks_Tumor.bed", format = "bed")
+export(res_N, "Peaks_Normal.bed", format = "bed")
+
+bed_file_list <- list(
+  Tumor  = "Peaks_Tumor.bed", 
+  Normal = "Peaks_Normal.bed"
+)
+plot_res <- GuitarPlot(
+  txTxdb = my_txdb_hg38,            
+  stBedFiles = bed_file_list, 
+  miscOutFilePrefix = "Guitar_Plot_T_vs_N" 
+)
+plot_res + 
+  theme_bw() +
+  scale_fill_manual(values = c("Tumor" = "#E64B35", "Normal" = "#4DBBD5")) + 
+  ggtitle("Distribution of m6A Peaks (Tumor vs Normal)") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+library(org.Hs.eg.db)
+try({
+  df_peaks$Symbol <- mapIds(org.Hs.eg.db,
+                            keys = as.character(df_peaks$gene_id), 
+                            column = "SYMBOL",
+                            keytype = "ENTREZID",
+                            multiVals = "first")
+}, silent = TRUE)
+
+
+write.csv(df_peaks, "m6A_Peaks_Result.csv", row.names = FALSE)
+
+
+
+
+export(res_peaks, "m6A_Peaks.bed", format = "bed")
+
+library(Guitar)
+library(ggplot2)
+input_bed_path <- "m6A_Peaks.bed"
+plot_res <- GuitarPlot(
+    txTxdb = my_txdb_hg38,            
+    stBedFiles = list(MeRIP = input_bed_path),
+    miscOutFilePrefix = "Guitar_Plot"
+)
+           
+
+
+peaks <- read.csv("m6A_Peaks_Result.csv",header = T)
+df<-list(peaks=peaks$Annotation)
+awk 'BEGIN{OFS="\t"} {\$1="chr"\$1; print \$0}' /home/dell/MeRIP-seq/mapping/macs2_out/IP_N1_peaks.narrowPeak > peaks_with_chr.bed
+
+
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+Tumor<-read.delim("E:\\APA\\data\\MeRIP-seq\\data\\annotated_Peaks\\Tumor_peaks_annotated.txt",header = TRUE, 
+                    quote = "",  
+                    sep = "\t",
+                    check.names = FALSE) 
+Normal<- read.delim("E:\\APA\\data\\MeRIP-seq\\data\\annotated_Peaks\\Normal_peaks_annotated.txt",header = TRUE, 
+                    quote = "",     
+                    sep = "\t",     
+                    check.names = FALSE) 
+df<-list(Tumor=as.character(Tumor$Annotation),Normal=as.character(Normal$Annotation))
+type_comb <- map_dfr(df, function(x) {
+  if (length(x) == 0) return(NULL)
+  tmp <- sapply(strsplit(x, split = '\\('), '[', 1)
+  clean_type <- trimws(tmp)
+  as.data.frame(table(clean_type))
+}, .id = "Group") 
+type_comb$Sample <- c('Tumor', 'Normal')
+
+final <-type_comb
+colnames(final) <- c("Sample", "Feature", "Count")
+final <- final %>%
+  group_by(Sample) %>%
+  mutate(Percent = Count / sum(Count)) %>%
+  ungroup()
+
+my_colors <- c(
+  "#E64B35CC", 
+  "#4DBBD5CC", 
+  "#00A087CC", 
+  "#3C5488CC", 
+  "#F39B7FCC", 
+  "#8491B4CC", 
+  "#91D1C2CC", 
+  "#DC0000CC", 
+  "#7E6148CC"  
+)
+
+ggplot(final, aes(x = "", y = Percent, fill = Feature)) +
+  geom_col(width = 1, color = "white") + 
+  coord_polar(theta = "y") + 
+  facet_wrap(~Sample) + 
+  theme_void() + 
+  theme(
+    legend.position = 'right',
+    strip.text.x = element_text(size = 14, face = "bold"),
+    plot.title = element_text(hjust = 0.5, size = 16)
+  ) +
+
+  scale_fill_manual(values = my_colors, name = 'Genomic Features') +
+  ggtitle("Distribution of Genomic Regions")
+
+
+
+
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+plot_data <- type_comb %>%
+  rename(Group = 1, Feature = 2, Count = 3) %>% 
+  group_by(Group) %>%
+  mutate(Percent = Count / sum(Count)) %>% # 计算百分比
+  ungroup()
+
+
+ggplot(plot_data, aes(x = Group, y = Count, fill = Feature)) +
+  geom_col(position = "fill", width = 0.6) + 
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_brewer(palette = "Set3") + 
+  theme_classic() +
+  labs(
+    title = "Genomic Distribution of Peaks",
+    x = "Sample Group",
+    y = "Percentage (%)",
+    fill = "Region Type"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.text = element_text(size = 12, color = "black"),
+    axis.title = element_text(size = 14)
+  )
+
